@@ -1,0 +1,6 @@
+{
+  "name": "VocalAI: Voice & Text Assistant",
+  "description": "An intelligent AI assistant featuring voice conversations, persistent chat history, and high-level reasoning.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": []
+}

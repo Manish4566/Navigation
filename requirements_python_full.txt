@@ -1,0 +1,7 @@
+reflex
+google-genai
+python-dotenv
+pydantic
+psutil
+pyautogui
+opencv-python
