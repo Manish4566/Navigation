@@ -1,370 +1,595 @@
-import React, { useState, useEffect } from 'react';
-import { X, Key, ShieldCheck, ExternalLink, Save, Info, Activity, AlertCircle, Eye, EyeOff, Edit2, Send, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
-import { getAI } from '../services/ai';
+import { X, Sparkles, Brain, Palette, Code, Image as ImageIcon, MessageSquare, Zap, ChevronRight, ChevronDown, Settings, Cloud, Check, Key, Mic, Send, Eye, EyeOff, Edit2 } from 'lucide-react';
+import { LiveConfig, AISetting } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  config: LiveConfig;
+  setConfig: React.Dispatch<React.SetStateAction<LiveConfig>>;
+  onLoginClick: () => void;
+  onSendMessage: (text: string) => void;
+  isConnected: boolean;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  config,
+  setConfig,
+  onLoginClick,
+  onSendMessage,
+  isConnected
+}) => {
+  const [showAIList, setShowAIList] = useState(false);
+  const [openVersionListId, setOpenVersionListId] = useState<string | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
-  const [bridgeUrl, setBridgeUrl] = useState('');
   const [isKeyVisible, setIsKeyVisible] = useState(false);
-  const [isKeySaved, setIsKeySaved] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [testError, setTestError] = useState('');
-  const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'checking' | 'online' | 'offline'>('idle');
+  const [isKeySaved, setIsKeySaved] = useState(!!config.customApiKey);
+  const [chatInput, setChatInput] = useState('');
 
-  // JSON detection
-  const isJsonPasted = apiKeyInput.trim().startsWith('{') || apiKeyInput.trim().startsWith('[');
+  if (!isOpen) return null;
 
-  useEffect(() => {
-    if (isOpen) {
-      const savedKey = localStorage.getItem('GEMINI_API_KEY');
-      const savedBridge = localStorage.getItem('BRIDGE_URL') || '';
-      
-      setBridgeUrl(savedBridge);
-      setBridgeStatus('idle');
-
-      if (savedKey) {
-        setApiKeyInput(savedKey);
-        setIsKeySaved(true);
-      } else {
-        setApiKeyInput('');
-        setIsKeySaved(false);
-      }
-      setTestStatus('idle');
-      setTestError('');
-    }
-  }, [isOpen]);
-
-  const handleSaveConfig = () => {
-    localStorage.setItem('BRIDGE_URL', bridgeUrl.trim());
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2000);
-  };
-
-  const handleCheckBridge = async () => {
-    if (!bridgeUrl.trim()) return;
-    setBridgeStatus('checking');
-    try {
-      const res = await fetch(`${bridgeUrl.trim()}/status`, { 
-        method: 'GET',
-        mode: 'cors',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (res.ok) setBridgeStatus('online');
-      else setBridgeStatus('offline');
-    } catch (e) {
-      setBridgeStatus('offline');
+  const handleChatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (chatInput.trim()) {
+      onSendMessage(chatInput.trim());
+      setChatInput('');
     }
   };
 
-  const handleSendKey = async () => {
-    if (!apiKeyInput.trim()) return;
-    
-    setIsLoading(true);
-    // Auto-test before saving to ensure a "Working System"
-    try {
-      const ai = getAI(apiKeyInput.trim());
-      await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: "hi",
-      });
-      
-      localStorage.setItem('GEMINI_API_KEY', apiKeyInput.trim());
+  const handleSendKey = () => {
+    if (apiKeyInput.trim()) {
+      setConfig(prev => ({ ...prev, customApiKey: apiKeyInput.trim() }));
+      setApiKeyInput('');
       setIsKeySaved(true);
-      setTestStatus('success');
-    } catch (err: any) {
-      console.error("API Key Test Failed:", err);
-      setTestStatus('error');
-      setTestError(err?.message || "Invalid API key or network error.");
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleEditKey = () => {
+    setApiKeyInput(config.customApiKey || '');
     setIsKeySaved(false);
-    setTestStatus('idle');
   };
 
-  const handleRemove = () => {
-    localStorage.removeItem('GEMINI_API_KEY');
-    setApiKeyInput('');
-    setIsKeySaved(false);
-    setTestStatus('idle');
+  const selectVersion = (aiId: string, versionId: string) => {
+    setConfig(prev => ({
+      ...prev,
+      model: versionId,
+      aiSettings: prev.aiSettings.map(s => 
+        s.id === aiId ? { ...s, selectedVersion: versionId } : s
+      )
+    }));
+    setOpenVersionListId(null);
   };
 
-  const handleTestOnly = async () => {
-    if (!apiKeyInput.trim()) return;
-    setTestStatus('testing');
-    setTestError('');
-    
-    try {
-      const ai = getAI(apiKeyInput.trim());
-      await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: "hi",
-      });
-      setTestStatus('success');
-    } catch (err: any) {
-      setTestStatus('error');
-      setTestError(err?.message || "Test failed.");
+  const toggleAISetting = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setConfig(prev => {
+      const newSettings = prev.aiSettings.map(s => 
+        s.id === id ? { ...s, enabled: !s.enabled } : s
+      );
+      
+      // If we just enabled a module that has versions, and no model is selected or we want to switch to it
+      const toggledSetting = newSettings.find(s => s.id === id);
+      let newModel = prev.model;
+      if (toggledSetting?.enabled && toggledSetting.selectedVersion) {
+        newModel = toggledSetting.selectedVersion;
+      }
+
+      return {
+        ...prev,
+        model: newModel,
+        aiSettings: newSettings
+      };
+    });
+  };
+
+  const getIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'sparkles': return <Sparkles size={18} className="text-purple-500" />;
+      case 'brain': return <Brain size={18} className="text-blue-500" />;
+      case 'palette': return <Palette size={18} className="text-pink-500" />;
+      case 'code': return <Code size={18} className="text-green-500" />;
+      case 'image': return <ImageIcon size={18} className="text-orange-500" />;
+      case 'message': return <MessageSquare size={18} className="text-cyan-500" />;
+      case 'zap': return <Zap size={18} className="text-yellow-500" />;
+      case 'cloud': return <Cloud size={18} className="text-blue-400" />;
+      default: return <Sparkles size={18} />;
     }
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-          />
-          
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-lg bg-white rounded-[32px] shadow-2xl overflow-hidden border border-slate-100"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-8 border-b border-slate-50">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-amber-50 rounded-2xl">
-                  <Key className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-800 tracking-tight">Tiered Configuration</h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">API Management System</p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-2 text-slate-400 hover:text-slate-600 transition-all rounded-xl hover:bg-slate-50"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="p-8 space-y-6">
-              {/* API Configuration Section */}
-              <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50/30 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <ShieldCheck size={18} className="text-amber-500" />
-                    <span className="font-bold text-slate-700 text-sm">Priority Settings</span>
-                  </div>
-                  <a 
-                    href="https://aistudio.google.com/app/apikey" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="text-[11px] font-bold text-amber-600 hover:underline flex items-center gap-1 transition-all"
-                  >
-                    Get Free Key <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Gemini API Key (Standard)</p>
-                  
-                  {!isKeySaved ? (
-                    <div className="relative flex gap-2">
-                      <div className="relative flex-1">
-                        <input 
-                          type={isKeyVisible ? "text" : "password"}
-                          placeholder="Paste your API key here..."
-                          value={apiKeyInput}
-                          onChange={e => {
-                            setApiKeyInput(e.target.value);
-                            setTestStatus('idle');
-                          }}
-                          className={cn(
-                            "w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-amber-500/40 transition-all font-mono",
-                            isJsonPasted && "border-red-200 bg-red-50/30"
-                          )}
-                        />
-                        <button 
-                          onClick={() => setIsKeyVisible(!isKeyVisible)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-300 hover:text-slate-500 transition-all"
-                        >
-                          {isKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                      <button 
-                        onClick={handleSendKey}
-                        disabled={!apiKeyInput.trim() || isLoading || isJsonPasted}
-                        className="bg-amber-500 text-white p-3.5 rounded-xl hover:bg-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-lg shadow-amber-100 flex items-center justify-center min-w-[52px]"
-                      >
-                        {isLoading ? (
-                          <Activity size={18} className="animate-spin" />
-                        ) : (
-                          <Send size={18} />
-                        )}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3.5 shadow-sm">
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse" />
-                        <span className="text-sm text-slate-600 font-mono truncate">
-                          {isKeyVisible ? apiKeyInput : '••••••••••••••••••••••••'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0 ml-2">
-                        <button 
-                          onClick={() => setIsKeyVisible(!isKeyVisible)}
-                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
-                          title={isKeyVisible ? "Hide Key" : "View Key"}
-                        >
-                          {isKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                        <button 
-                          onClick={handleEditKey}
-                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
-                          title="Edit Key"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {isJsonPasted && (
-                    <div className="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
-                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                      <p className="text-[10px] text-red-600 font-medium leading-relaxed">
-                        JSON detected! Please paste only the API Key string (e.g., AIza...).
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-2 pt-1">
-                    <p className="text-[9px] text-slate-400 leading-tight px-1 font-medium">
-                      Your key is stored locally for this session. It enables Live Vision, Voice, and System Control.
-                    </p>
-                    
-                    {!isKeySaved && apiKeyInput.trim() && !isJsonPasted && (
-                      <div className="flex items-center gap-2 px-1">
-                        <button
-                          onClick={handleTestOnly}
-                          disabled={testStatus === 'testing'}
-                          className={cn(
-                            "text-[10px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5",
-                            testStatus === 'success' ? "text-green-600 bg-green-50" :
-                            testStatus === 'error' ? "text-red-600 bg-red-50" :
-                            "text-slate-500 bg-slate-100 hover:bg-slate-200"
-                          )}
-                        >
-                          {testStatus === 'testing' ? <Activity size={10} className="animate-spin" /> : <Activity size={10} />}
-                          {testStatus === 'success' ? "Working Smoothly" : testStatus === 'error' ? "Test Failed" : "Verify Connectivity"}
-                        </button>
-                        {testStatus === 'error' && (
-                          <span className="text-[9px] text-red-400 font-medium truncate flex-1">
-                             {testError}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Bridge Configuration Section */}
-              <div className="p-5 rounded-2xl border border-indigo-100 bg-indigo-50/10 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Activity size={18} className="text-indigo-500" />
-                    <span className="font-bold text-slate-700 text-sm">PC Bridge Control</span>
-                  </div>
-                  <div className={cn(
-                    "px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center gap-1",
-                    bridgeStatus === 'online' ? "bg-green-100 text-green-600" :
-                    bridgeStatus === 'offline' ? "bg-red-100 text-red-600" :
-                    "bg-slate-100 text-slate-400"
-                  )}>
-                    <div className={cn("w-1.5 h-1.5 rounded-full", 
-                      bridgeStatus === 'online' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" :
-                      bridgeStatus === 'offline' ? "bg-red-500" :
-                      "bg-slate-400"
-                    )} />
-                    {bridgeStatus === 'online' ? "Online" : bridgeStatus === 'offline' ? "Offline" : "Idle"}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Bridge URL (ngrok link)</p>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text"
-                      placeholder="https://your-bridge.ngrok-free.app"
-                      value={bridgeUrl}
-                      onChange={e => {
-                        setBridgeUrl(e.target.value);
-                        setBridgeStatus('idle');
-                      }}
-                      className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-indigo-500/40 transition-all font-mono"
-                    />
-                    <button 
-                      onClick={handleSaveConfig}
-                      className={cn(
-                        "bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100",
-                        isSaved && "bg-green-600"
-                      )}
-                    >
-                      {isSaved ? <ShieldCheck size={18} /> : <Save size={18} />}
-                    </button>
-                  </div>
-                  
-                  <div className="flex items-center justify-between px-1">
-                    <button
-                      onClick={handleCheckBridge}
-                      disabled={bridgeStatus === 'checking' || !bridgeUrl.trim()}
-                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-all flex items-center gap-1.5"
-                    >
-                      {bridgeStatus === 'checking' ? <Activity size={10} className="animate-spin" /> : <Activity size={10} />}
-                      Check Connection
-                    </button>
-                    <p className="text-[9px] text-slate-400 font-medium italic">
-                      Use the link provided by your Python Bridge.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Technical breakdown info */}
-              <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-start gap-3">
-                <Info className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
-                <div className="space-y-1">
-                  <p className="text-[11px] font-bold text-indigo-900">Tiered Logic Active</p>
-                  <p className="text-[10px] text-indigo-700 leading-relaxed font-medium">
-                    Priority 1: User's Manual Key (Priority)<br/>
-                    Priority 2: System Environment Variable (Fallback)
-                  </p>
-                </div>
-              </div>
-
-              {isKeySaved && (
-                <button
-                  onClick={handleRemove}
-                  className="w-full py-3 text-red-500 font-bold text-xs hover:bg-red-50 transition-all rounded-xl border border-transparent hover:border-red-100"
-                >
-                  Reset Configuration & Remove Key
-                </button>
-              )}
-            </div>
-          </motion.div>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 20 }}
+        drag
+        dragMomentum={false}
+        className="bg-white w-full max-w-[450px] h-[650px] rounded-xl p-6 flex flex-col relative overflow-hidden"
+        style={{ WebkitAppRegion: 'no-drag' } as any}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Drag Handle Area */}
+        <div className="absolute top-0 left-0 right-0 h-10 cursor-move z-0" />
+        {/* Top Header with Auth Buttons */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-xl font-bold text-slate-900">Settings</h1>
+          <div className="flex gap-3">
+            <button 
+              onClick={onLoginClick}
+              className="bg-[#6b21a8] text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-[#581c87] transition-all active:scale-95"
+            >
+              Register
+            </button>
+            <button 
+              onClick={onLoginClick}
+              className="bg-slate-50 text-slate-700 px-5 py-2 rounded-lg font-bold text-sm hover:bg-slate-100 transition-all border border-slate-200 active:scale-95"
+            >
+              Sign In
+            </button>
+          </div>
         </div>
-      )}
-    </AnimatePresence>
+
+        {/* Close Button */}
+        <button 
+          onClick={onClose}
+          className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors z-10"
+        >
+          <X size={20} />
+        </button>
+
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+          {/* Chat Bot Toggle Section */}
+          <div className="mb-6 p-4 rounded-xl border border-slate-200 bg-slate-50/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <MessageSquare size={18} className="text-blue-500" />
+                <span className="font-bold text-slate-700">Wardenix Chat Terminal</span>
+              </div>
+            </div>
+            <p className="text-[9px] text-slate-400 mt-2 px-1">
+              Open a dedicated high-tech window for text, image, and file-based interaction.
+            </p>
+          </div>
+
+          {/* API Configuration Section */}
+          <div className="mb-6 p-4 rounded-xl border border-slate-200 bg-slate-50/30">
+            <div className="flex items-center gap-3 mb-3">
+              <Key size={18} className="text-amber-500" />
+              <span className="font-bold text-slate-700">API Configuration</span>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Gemini API Key</p>
+              
+              {!isKeySaved ? (
+                <div className="relative flex gap-2">
+                  <input 
+                    type={isKeyVisible ? "text" : "password"}
+                    placeholder="Paste your API key here..."
+                    value={apiKeyInput}
+                    onChange={e => setApiKeyInput(e.target.value)}
+                    className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-amber-500/40 transition-all"
+                  />
+                  <button 
+                    onClick={handleSendKey}
+                    disabled={!apiKeyInput.trim()}
+                    className="bg-amber-500 text-white p-3 rounded-xl hover:bg-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                  >
+                    <Send size={18} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                    <span className="text-sm text-slate-600 font-mono truncate">
+                      {isKeyVisible ? config.customApiKey : '••••••••••••••••'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    <button 
+                      onClick={() => setIsKeyVisible(!isKeyVisible)}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+                      title={isKeyVisible ? "Hide Key" : "View Key"}
+                    >
+                      {isKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                    <button 
+                      onClick={handleEditKey}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+                      title="Edit Key"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              <p className="text-[9px] text-slate-400 leading-tight px-1">
+                Your key is stored locally for this session. It enables Live Vision and Voice features.
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-amber-600 hover:underline ml-1 font-bold"
+                >
+                  Get a free Gemini API key here.
+                </a>
+              </p>
+            </div>
+          </div>
+
+          {/* Voice Selection Section */}
+          <div className="mb-6 p-4 rounded-xl border border-slate-200 bg-slate-50/30">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Mic size={18} className="text-purple-500" />
+                <span className="font-bold text-slate-700">Voice Persona</span>
+              </div>
+              <span className="text-[10px] font-black text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                {config.voiceName} Active
+              </span>
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { name: 'Puck', color: 'bg-blue-500', desc: 'Male • Energetic' },
+                { name: 'Charon', color: 'bg-slate-700', desc: 'Male • Deep' },
+                { name: 'Kore', color: 'bg-pink-500', desc: 'Female • Soft' },
+                { name: 'Fenrir', color: 'bg-amber-600', desc: 'Male • Bold' },
+                { name: 'Zephyr', color: 'bg-indigo-500', desc: 'Female • Melodic' }
+              ].map(voice => (
+                <button
+                  key={voice.name}
+                  onClick={() => {
+                    setConfig(prev => ({ ...prev, voiceName: voice.name as any }));
+                    if (isConnected) {
+                      onSendMessage(`[SYSTEM] Restarting session to apply ${voice.name} voice...`);
+                    }
+                  }}
+                  className={`group relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all duration-300 ${
+                    config.voiceName === voice.name 
+                      ? 'bg-white shadow-lg ring-2 ring-purple-500 scale-105' 
+                      : 'bg-white/50 hover:bg-white border border-slate-100 hover:border-purple-200'
+                  }`}
+                  title={voice.desc}
+                >
+                  <div className={`w-8 h-8 rounded-full ${voice.color} flex items-center justify-center text-white shadow-inner transition-transform group-hover:scale-110`}>
+                    <Mic size={14} />
+                  </div>
+                  <span className={`text-[9px] font-bold tracking-tight ${config.voiceName === voice.name ? 'text-purple-600' : 'text-slate-500'}`}>
+                    {voice.name}
+                  </span>
+                  {config.voiceName === voice.name && (
+                    <motion.div 
+                      layoutId="voice-active"
+                      className="absolute -top-1 -right-1 w-3 h-3 bg-purple-600 rounded-full border-2 border-white flex items-center justify-center"
+                    >
+                      <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
+                    </motion.div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <p className="text-[9px] text-slate-400 mt-3 px-1 italic">
+              * Selection is saved automatically and persists across sessions.
+            </p>
+          </div>
+
+          {/* Webcam Size Section */}
+          <div className="mb-6 p-4 rounded-xl border border-slate-200 bg-slate-50/30">
+            <div className="flex items-center gap-3 mb-3">
+              <ImageIcon size={18} className="text-cyan-500" />
+              <span className="font-bold text-slate-700">Webcam Circle Size</span>
+            </div>
+            <div className="space-y-3">
+              <input 
+                type="range" 
+                min="100" 
+                max="400" 
+                value={config.webcamSize} 
+                onChange={(e) => setConfig(prev => ({ ...prev, webcamSize: parseInt(e.target.value) }))}
+                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+              />
+              <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase">
+                <span>Small</span>
+                <span className="text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded">{config.webcamSize}px</span>
+                <span>Large</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Wardenix Core Toggle Button */}
+          <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white text-slate-700 mb-4 hover:border-blue-400 transition-all">
+            <div className="flex items-center gap-3">
+              <Code size={20} className="text-blue-600" />
+              <span className="font-bold text-lg">Wardenix Core</span>
+            </div>
+            <button 
+              onClick={() => setConfig(prev => ({ ...prev, isDeveloperMode: !prev.isDeveloperMode }))}
+              className={`relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-500 ${
+                config.isDeveloperMode ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'
+              }`}
+            >
+              <motion.div
+                animate={{ rotate: config.isDeveloperMode ? 360 : 0 }}
+                transition={{ duration: 1.5, repeat: config.isDeveloperMode ? Infinity : 0, ease: "linear" }}
+              >
+                <Settings size={24} />
+              </motion.div>
+            </button>
+          </div>
+
+          {/* AI Modules Toggle Button */}
+          <button 
+            onClick={() => setShowAIList(!showAIList)}
+            className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all mb-6 ${
+              showAIList 
+                ? 'border-purple-600 bg-purple-600 text-white' 
+                : 'border-slate-200 bg-white text-slate-700 hover:border-purple-400'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Sparkles size={20} className={showAIList ? 'text-white' : 'text-purple-600'} />
+              <span className="font-bold text-lg">AI Modules</span>
+            </div>
+            {showAIList ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+          </button>
+
+          <AnimatePresence>
+            {showAIList && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="space-y-4 mb-8">
+                  <p className="text-sm text-slate-500 px-1">Enable specialized modules for Coding, Education, Health, and more.</p>
+                  {config.aiSettings.map((setting: AISetting) => {
+                    const hasVersions = setting.versions && setting.versions.length > 0;
+                    const isVersionListOpen = openVersionListId === setting.id;
+                    
+                    return (
+                      <div key={setting.id} className="space-y-2">
+                        <div 
+                          className={`p-4 rounded-xl border transition-all flex items-center justify-between ${
+                            setting.enabled 
+                              ? 'border-purple-200 bg-purple-50/10' 
+                              : 'border-slate-100 bg-white hover:border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
+                              setting.enabled ? 'bg-white shadow-sm' : 'bg-slate-50'
+                            }`}>
+                              {getIcon(setting.icon)}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-slate-800 text-sm">{setting.name}</h3>
+                                {setting.enabled && setting.selectedVersion && (
+                                  <span className="text-[8px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter">
+                                    {setting.versions?.find(v => v.id === setting.selectedVersion)?.name}
+                                  </span>
+                                )}
+                                {setting.enabled && setting.selectedVersion?.includes('flash') && (
+                                  <span className="text-[8px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter ml-1">
+                                    Free Tier
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500 leading-tight mt-0.5">{setting.description}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-3">
+                            {setting.enabled && hasVersions && (
+                              <button 
+                                onClick={() => setOpenVersionListId(isVersionListOpen ? null : setting.id)}
+                                className="p-2 rounded-lg bg-purple-100 text-purple-600 hover:bg-purple-200 transition-colors"
+                                title="Select Version"
+                              >
+                                <ChevronRight size={16} className={`transition-transform ${isVersionListOpen ? 'rotate-90' : ''}`} />
+                              </button>
+                            )}
+                            <div 
+                              className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer ${
+                                setting.enabled ? 'bg-purple-600' : 'bg-slate-200'
+                              }`}
+                              onClick={(e) => toggleAISetting(e, setting.id)}
+                            >
+                              <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${
+                                setting.enabled ? 'left-6' : 'left-1'
+                              }`} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Module API Key/URL Input */}
+                        <AnimatePresence>
+                          {setting.enabled && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="ml-14 overflow-hidden"
+                            >
+                              <div className="pb-4 space-y-3">
+                                {setting.id === 'ollama' ? (
+                                  <div className="space-y-2">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Ollama Server URL</p>
+                                    <div className="flex gap-2">
+                                      <input 
+                                        type="text"
+                                        placeholder="http://localhost:11434"
+                                        value={setting.baseUrl || ''}
+                                        onChange={e => setConfig(prev => ({
+                                          ...prev,
+                                          aiSettings: prev.aiSettings.map(s => 
+                                            s.id === setting.id ? { ...s, baseUrl: e.target.value } : s
+                                          )
+                                        }))}
+                                        className="flex-1 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-[10px] text-slate-600 focus:outline-none focus:border-purple-300 transition-all"
+                                      />
+                                      <button 
+                                        onClick={async () => {
+                                          try {
+                                            const headers: any = { 'Content-Type': 'application/json' };
+                                            if (setting.apiKey) headers['Authorization'] = `Bearer ${setting.apiKey}`;
+                                            const res = await fetch(`${setting.baseUrl}/api/tags`, { headers });
+                                            if (res.ok) alert("Connection Successful!");
+                                            else {
+                                              const body = await res.json().catch(() => ({}));
+                                              alert(`Server Error: ${body.error || res.statusText || res.status}`);
+                                            }
+                                          } catch (e) {
+                                            alert("Connection Failed. Check URL, API Key, and CORS settings (OLLAMA_ORIGINS=\"*\").");
+                                          }
+                                        }}
+                                        className="bg-purple-100 text-purple-600 px-3 py-2 rounded-lg text-[10px] font-bold hover:bg-purple-200 transition-all"
+                                      >
+                                        Test
+                                      </button>
+                                    </div>
+                                    <p className="text-[8px] text-amber-600 leading-tight italic">
+                                      * Important: Run Ollama with OLLAMA_ORIGINS="*" to allow browser access.
+                                    </p>
+                                    
+                                    <div className="pt-2 space-y-2">
+                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Ollama API Key (Optional)</p>
+                                      <input 
+                                        type="password"
+                                        placeholder="Leave empty for local..."
+                                        value={setting.apiKey || ''}
+                                        onChange={e => setConfig(prev => ({
+                                          ...prev,
+                                          aiSettings: prev.aiSettings.map(s => 
+                                            s.id === setting.id ? { ...s, apiKey: e.target.value } : s
+                                          )
+                                        }))}
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-[10px] text-slate-600 focus:outline-none focus:border-purple-300 transition-all"
+                                      />
+                                    </div>
+                                  </div>
+                                ) : setting.id === 'wardenix' ? (
+                                  <div className="space-y-2">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Wardenix Bridge URL (Use ngrok for Cloud)</p>
+                                    <div className="flex gap-2">
+                                      <input 
+                                        type="text"
+                                        placeholder="https://your-ngrok-link.ngrok-free.app"
+                                        value={setting.baseUrl || ''}
+                                        onChange={e => setConfig(prev => ({
+                                          ...prev,
+                                          aiSettings: prev.aiSettings.map(s => 
+                                            s.id === setting.id ? { ...s, baseUrl: e.target.value } : s
+                                          )
+                                        }))}
+                                        className="flex-1 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-[10px] text-slate-600 focus:outline-none focus:border-purple-300 transition-all"
+                                      />
+                                      <button 
+                                        onClick={async () => {
+                                          try {
+                                            const res = await fetch(`${setting.baseUrl}/status`, {
+                                              headers: { 'ngrok-skip-browser-warning': 'true' }
+                                            });
+                                            if (res.ok) alert("Wardenix Bridge Online!");
+                                            else alert("Bridge responded but with an error.");
+                                          } catch (e) {
+                                            alert("Bridge Offline! If you are in the browser preview, use a public tunnel (ngrok) and paste the URL here. 127.0.0.1 only works if app is running locally on your PC.");
+                                          }
+                                        }}
+                                        className="bg-purple-100 text-purple-600 px-3 py-2 rounded-lg text-[10px] font-bold hover:bg-purple-200 transition-all"
+                                      >
+                                        Test
+                                      </button>
+                                    </div>
+                                    <p className="text-[8px] text-blue-600 leading-tight italic">
+                                      * Tip: Cloud preview requires a public URL (e.g. ngrok). 127.0.0.1 is for local execution only.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{setting.name} API Key</p>
+                                    <input 
+                                      type="password"
+                                      placeholder={`${setting.name} API Key...`}
+                                      value={setting.apiKey || ''}
+                                      onChange={e => setConfig(prev => ({
+                                        ...prev,
+                                        aiSettings: prev.aiSettings.map(s => 
+                                          s.id === setting.id ? { ...s, apiKey: e.target.value } : s
+                                        )
+                                      }))}
+                                      className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-[10px] text-slate-600 placeholder:text-slate-300 focus:outline-none focus:border-purple-300 transition-all"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {/* Version List Dropdown */}
+                        <AnimatePresence>
+                          {isVersionListOpen && setting.enabled && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="ml-14 space-y-1 overflow-hidden"
+                            >
+                              {setting.versions?.map((version) => (
+                                <button
+                                  key={version.id}
+                                  onClick={() => selectVersion(setting.id, version.id)}
+                                  className={`w-full text-left px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${
+                                    setting.selectedVersion === version.id
+                                      ? 'bg-purple-600 text-white shadow-sm'
+                                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  {version.name}
+                                  {setting.selectedVersion === version.id && <Check size={12} />}
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Wardenix Specialized Tools Section */}
+          <div className="mt-4 pt-8 border-t border-slate-100">
+            <h2 className="text-lg font-bold text-slate-900 mb-4">System Capabilities</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Vision Mode</p>
+                <p className="text-xs font-medium text-slate-700">Real-time Analysis</p>
+              </div>
+              <div className="p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Automation</p>
+                <p className="text-xs font-medium text-slate-700">A to Z PC Control</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </motion.div>
+    </motion.div>
   );
 };

@@ -1,3 +1,29 @@
+export interface AIVersion {
+  id: string;
+  name: string;
+}
+
+export interface AISetting {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  enabled: boolean;
+  selectedVersion?: string;
+  versions?: AIVersion[];
+  baseUrl?: string;
+  apiKey?: string;
+}
+
+export interface LiveConfig {
+  model: string;
+  voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' | 'Aoede';
+  webcamSize: number;
+  isDeveloperMode: boolean;
+  customApiKey?: string;
+  aiSettings: AISetting[];
+}
+
 export interface UserProfile {
   uid: string;
   email: string;

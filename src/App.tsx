@@ -3,7 +3,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, signInWithGoogle, db } from './lib/firebase';
 import { dbService } from './services/db';
 import { generateChatResponse, generateTTS } from './services/ai';
-import { ChatSession, Message } from './types';
+import { ChatSession, Message, LiveConfig } from './types';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { AuthOverlay } from './components/AuthOverlay';
@@ -28,6 +28,67 @@ export default function App() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState<'Kore' | 'Puck' | 'Charon' | 'Fenrir' | 'Zephyr' | 'Aoede'>('Kore');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [config, setConfig] = useState<LiveConfig>(() => {
+    const saved = localStorage.getItem('wardenix_config');
+    if (saved) return JSON.parse(saved);
+    return {
+      model: 'gemini-3-flash-preview',
+      voiceName: 'Kore',
+      webcamSize: 180,
+      isDeveloperMode: false,
+      customApiKey: localStorage.getItem('GEMINI_API_KEY') || undefined,
+      aiSettings: [
+        {
+          id: 'gemini',
+          name: 'Google Gemini',
+          description: 'Multimodal AI with direct PC integration',
+          icon: 'sparkles',
+          enabled: true,
+          selectedVersion: 'gemini-3-flash-preview',
+          versions: [
+            { id: 'gemini-3-flash-preview', name: 'Gemini 1.5 Flash' },
+            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+          ]
+        },
+        {
+          id: 'ollama',
+          name: 'Local Ollama',
+          description: 'Run open-weight models privately on your PC',
+          icon: 'brain',
+          enabled: false,
+          baseUrl: 'http://localhost:11434',
+          selectedVersion: 'llama3',
+          versions: [
+            { id: 'llama3', name: 'Llama 3' },
+            { id: 'mistral', name: 'Mistral' }
+          ]
+        },
+        {
+          id: 'wardenix',
+          name: 'Wardenix Bridge',
+          description: 'Remote PC Control & System Automation',
+          icon: 'zap',
+          enabled: true,
+          baseUrl: localStorage.getItem('BRIDGE_URL') || ''
+        }
+      ]
+    };
+  });
+
+  // Sync config to localStorage
+  useEffect(() => {
+    localStorage.setItem('wardenix_config', JSON.stringify(config));
+    if (config.customApiKey) localStorage.setItem('GEMINI_API_KEY', config.customApiKey);
+    const bridgeUrl = config.aiSettings.find(s => s.id === 'wardenix')?.baseUrl;
+    if (bridgeUrl) localStorage.setItem('BRIDGE_URL', bridgeUrl);
+  }, [config]);
+
+  // Sync selected voice between old state and new config
+  useEffect(() => {
+    if (config.voiceName !== selectedVoice) {
+      setSelectedVoice(config.voiceName);
+    }
+  }, [config.voiceName]);
 
   // Optimized Connection Test with Long Timeout
   useEffect(() => {
@@ -359,6 +420,11 @@ export default function App() {
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
+        config={config}
+        setConfig={setConfig}
+        onLoginClick={handleSignIn}
+        onSendMessage={(text) => handleSendMessage(text, false)}
+        isConnected={true}
       />
       {/* Mobile Sidebar Toggle */}
       <button
