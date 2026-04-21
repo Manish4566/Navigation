@@ -8,6 +8,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { AuthOverlay } from './components/AuthOverlay';
 import { InstallPWA } from './components/InstallPWA';
+import { SettingsModal } from './components/SettingsModal';
 import { Menu, ChevronsRight } from 'lucide-react';
 import { cn } from './lib/utils';
 import { doc, getDocFromServer } from 'firebase/firestore';
@@ -26,6 +27,7 @@ export default function App() {
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState<'Kore' | 'Puck' | 'Charon' | 'Fenrir' | 'Zephyr' | 'Aoede'>('Kore');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Optimized Connection Test with Long Timeout
   useEffect(() => {
@@ -334,6 +336,10 @@ export default function App() {
   return (
     <div className="flex h-screen bg-white text-slate-800 font-sans">
       <InstallPWA />
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+      />
       {/* Mobile Sidebar Toggle */}
       <button
         onClick={() => setIsSidebarOpen(true)}
@@ -371,6 +377,7 @@ export default function App() {
         onNewChat={handleNewChat}
         onDeleteSession={handleDeleteSession}
         onSignOut={handleSignOut}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
         displayName={user.displayName || 'User'}

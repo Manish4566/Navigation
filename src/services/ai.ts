@@ -66,15 +66,21 @@ const pcControlTools = [
 
 // Initialization with lazy loading for API key as per best practices
 let genAI: GoogleGenAI | null = null;
+let currentKey: string | null = null;
 
-export function getAI() {
-  if (!genAI) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not defined");
-    }
-    genAI = new GoogleGenAI({ apiKey });
+export function getAI(customKey?: string) {
+  const keyToUse = customKey || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
+  
+  if (!keyToUse) {
+    throw new Error("GEMINI_API_KEY is not defined");
   }
+
+  // If the key has changed or if it hasn't been initialized yet
+  if (!genAI || currentKey !== keyToUse) {
+    currentKey = keyToUse;
+    genAI = new GoogleGenAI({ apiKey: keyToUse });
+  }
+  
   return genAI;
 }
 

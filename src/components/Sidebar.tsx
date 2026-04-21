@@ -11,6 +11,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onDeleteSession: (e: React.MouseEvent, id: string) => void;
   onSignOut: () => void;
+  onOpenSettings: () => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   displayName: string;
@@ -23,6 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNewChat,
   onDeleteSession,
   onSignOut,
+  onOpenSettings,
   isOpen,
   setIsOpen,
   displayName
@@ -131,7 +133,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="absolute bottom-full left-0 mb-4 w-full bg-white border border-slate-100 rounded-2xl shadow-2xl p-2 z-[60] overflow-hidden"
               >
                 <div className="space-y-1">
-                  <button className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all text-slate-600 text-sm font-semibold">
+                  <button 
+                    onClick={() => {
+                      onOpenSettings();
+                      setShowProfileMenu(false);
+                    }}
+                    className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all text-slate-600 text-sm font-semibold"
+                  >
                     <Settings className="w-4 h-4 text-slate-400" />
                     <span>Settings</span>
                   </button>
