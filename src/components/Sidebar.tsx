@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Trash2, LogOut, ChevronsLeft, Shield, CheckCircle2, Settings, HelpCircle, ArrowUpCircle, Files, User, MessageSquare, Bot } from 'lucide-react';
-import { ChatSession } from '../types';
+import { ChatSession, LiveConfig } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { Key, Eye, EyeOff, Edit2, Send, Check } from 'lucide-react';
 
 interface SidebarProps {
   sessions: ChatSession[];
@@ -15,6 +16,8 @@ interface SidebarProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   displayName: string;
+  config: LiveConfig;
+  setConfig: React.Dispatch<React.SetStateAction<LiveConfig>>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,21 +30,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings,
   isOpen,
   setIsOpen,
-  displayName
+  displayName,
+  config,
+  setConfig
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [menuView, setMenuView] = useState<'profile' | 'settings'>('profile');
   const [showHistory, setShowHistory] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isKeyVisible, setIsKeyVisible] = useState(false);
+  const [isKeySaved, setIsKeySaved] = useState(!!config.customApiKey);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowProfileMenu(false);
+        setMenuView('profile'); // Reset to profile view when closing
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleSendKey = () => {
+    if (apiKeyInput.trim()) {
+      setConfig(prev => ({ ...prev, customApiKey: apiKeyInput.trim() }));
+      setApiKeyInput('');
+      setIsKeySaved(true);
+    }
+  };
+
+  const handleEditKey = () => {
+    setApiKeyInput(config.customApiKey || '');
+    setIsKeySaved(false);
+  };
 
   return (
     <aside className={cn(
@@ -123,7 +147,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Footer */}
         <div className="mt-8 pt-6 border-t border-slate-50 relative">
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             {showProfileMenu && (
               <motion.div 
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -132,38 +156,151 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 ref={menuRef}
                 className="absolute bottom-full left-0 mb-4 w-full bg-white border border-slate-100 rounded-2xl shadow-2xl p-2 z-[60] overflow-hidden"
               >
-                <div className="space-y-1">
-                  <button 
-                    onClick={() => {
-                      onOpenSettings();
-                      setShowProfileMenu(false);
-                    }}
-                    className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all text-slate-600 text-sm font-semibold"
+                {menuView === 'profile' ? (
+                  <motion.div 
+                    key="profile"
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: -20, opacity: 0 }}
+                    className="space-y-1"
                   >
-                    <Settings className="w-4 h-4 text-slate-400" />
-                    <span>Settings</span>
-                  </button>
-                  <button className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all text-slate-600 text-sm font-semibold">
-                    <HelpCircle className="w-4 h-4 text-slate-400" />
-                    <span>Help</span>
-                  </button>
-                  <button className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all font-bold text-indigo-600 bg-indigo-50 rounded-xl">
-                    <ArrowUpCircle className="w-4 h-4" />
-                    <span>Upgrade</span>
-                  </button>
-                  <button className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all text-slate-600 text-sm font-semibold">
-                    <Files className="w-4 h-4 text-slate-400" />
-                    <span>Files</span>
-                  </button>
-                  <div className="h-px bg-slate-50 my-1" />
-                  <button 
-                    onClick={onSignOut}
-                    className="flex items-center gap-3 w-full p-3 hover:bg-red-50 rounded-xl transition-all text-red-500 text-sm font-semibold"
+                    <button 
+                      onClick={() => setMenuView('settings')}
+                      className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all text-slate-600 text-sm font-semibold"
+                    >
+                      <Settings className="w-4 h-4 text-slate-400" />
+                      <span>Settings</span>
+                    </button>
+                    <button className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all text-slate-600 text-sm font-semibold">
+                      <HelpCircle className="w-4 h-4 text-slate-400" />
+                      <span>Help</span>
+                    </button>
+                    <button className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all font-bold text-indigo-600 bg-indigo-50 rounded-xl">
+                      <ArrowUpCircle className="w-4 h-4" />
+                      <span>Upgrade</span>
+                    </button>
+                    <button className="flex items-center gap-3 w-full p-3 hover:bg-slate-50 rounded-xl transition-all text-slate-600 text-sm font-semibold">
+                      <Files className="w-4 h-4 text-slate-400" />
+                      <span>Files</span>
+                    </button>
+                    <div className="h-px bg-slate-50 my-1" />
+                    <button 
+                      onClick={onSignOut}
+                      className="flex items-center gap-3 w-full p-3 hover:bg-red-50 rounded-xl transition-all text-red-500 text-sm font-semibold"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.div 
+                    key="settings"
+                    initial={{ x: 20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: 20, opacity: 0 }}
+                    className="p-3 space-y-4"
                   >
-                    <LogOut className="w-4 h-4" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
+                    <div className="flex items-center justify-between mb-2">
+                       <button 
+                        onClick={() => setMenuView('profile')}
+                        className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+                       >
+                         Back
+                       </button>
+                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Wardenix Settings</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Key size={14} className="text-amber-500" />
+                        <span className="text-xs font-bold text-slate-700">Gemini API Key</span>
+                      </div>
+                      
+                      {!isKeySaved ? (
+                        <div className="relative flex gap-2">
+                          <input 
+                            type={isKeyVisible ? "text" : "password"}
+                            placeholder="Paste API key..."
+                            value={apiKeyInput}
+                            onChange={e => setApiKeyInput(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSendKey()}
+                            className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-amber-500/40 transition-all font-mono"
+                          />
+                          <button 
+                            onClick={handleSendKey}
+                            disabled={!apiKeyInput.trim()}
+                            className="bg-amber-500 text-white p-2 rounded-xl hover:bg-amber-600 transition-all disabled:opacity-50 active:scale-95 shrink-0"
+                          >
+                            <Send size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0 animate-pulse" />
+                            <span className="text-xs text-slate-500 font-mono truncate">
+                              {isKeyVisible ? config.customApiKey : '••••••••••••'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0 ml-1">
+                            <button 
+                              onClick={() => setIsKeyVisible(!isKeyVisible)}
+                              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition-all"
+                            >
+                              {isKeyVisible ? <EyeOff size={12} /> : <Eye size={12} />}
+                            </button>
+                            <button 
+                              onClick={handleEditKey}
+                              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition-all"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-indigo-50/50 border border-indigo-100">
+                        <span className="text-[10px] font-bold text-indigo-600">Model</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                          <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-tight">
+                            {config.model === 'gemini-1.5-pro' ? 'Gemini 1.5 Pro' : config.model}
+                          </span>
+                        </div>
+                      </div>
+
+                      {isKeySaved && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const testAI = new (await import('@google/genai')).GoogleGenAI({ apiKey: config.customApiKey! });
+                              const model = testAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                              await model.generateContent("test");
+                              alert("API Connection Successful! Gemini 1.5 Pro is active.");
+                            } catch (e) {
+                              alert("API Connection Failed. Please check your key.");
+                            }
+                          }}
+                          className="w-full py-2 bg-slate-900 text-white rounded-xl text-[10px] font-bold hover:bg-slate-800 transition-all active:scale-95"
+                        >
+                          Test API Link
+                        </button>
+                      )}
+
+                      <p className="text-[9px] text-slate-400 leading-tight px-1 italic">
+                        Key stored locally. 
+                        <a 
+                          href="https://aistudio.google.com/app/apikey" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-amber-600 hover:underline ml-1 font-bold"
+                        >
+                          Get Key
+                        </a>
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

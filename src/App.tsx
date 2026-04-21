@@ -32,7 +32,7 @@ export default function App() {
     const saved = localStorage.getItem('wardenix_config');
     if (saved) return JSON.parse(saved);
     return {
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-pro',
       voiceName: 'Kore',
       webcamSize: 180,
       isDeveloperMode: false,
@@ -44,10 +44,10 @@ export default function App() {
           description: 'Multimodal AI with direct PC integration',
           icon: 'sparkles',
           enabled: true,
-          selectedVersion: 'gemini-3-flash-preview',
+          selectedVersion: 'gemini-1.5-pro',
           versions: [
-            { id: 'gemini-3-flash-preview', name: 'Gemini 1.5 Flash' },
-            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
+            { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' }
           ]
         },
         {
@@ -467,6 +467,8 @@ export default function App() {
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
         displayName={user.displayName || 'User'}
+        config={config}
+        setConfig={setConfig}
       />
 
       <main className="flex-1 relative flex flex-col min-w-0 transition-all duration-300">

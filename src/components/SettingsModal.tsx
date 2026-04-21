@@ -177,6 +177,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     placeholder="Paste your API key here..."
                     value={apiKeyInput}
                     onChange={e => setApiKeyInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && apiKeyInput.trim()) {
+                        handleSendKey();
+                      }
+                    }}
                     className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-amber-500/40 transition-all"
                   />
                   <button 

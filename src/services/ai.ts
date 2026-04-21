@@ -86,8 +86,8 @@ export function getAI(customKey?: string) {
 
 export async function generateChatResponse(messages: { role: string; content: string }[], useThinking: boolean = false, pastContext: string = "") {
   const ai = getAI();
-  // Using gemini-3-flash-preview for the best free-tier experience with high rate limits
-  const model = "gemini-3-flash-preview"; 
+  // Using gemini-1.5-pro as requested by the user
+  const model = "gemini-1.5-pro"; 
   
   const contents = messages.map(m => ({
     role: m.role === 'user' ? 'user' : 'model',
