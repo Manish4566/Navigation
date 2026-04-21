@@ -108,7 +108,11 @@ export async function generateChatResponse(messages: { role: string; content: st
 
   const config: any = {
     systemInstruction,
-    tools: pcControlTools,
+    tools: [
+      ...pcControlTools,
+      { googleMaps: {} } // Enable built-in Google Maps integration
+    ],
+    toolConfig: { includeServerSideToolInvocations: true } // Required for built-in tools with custom functions
   };
 
   if (useThinking) {
