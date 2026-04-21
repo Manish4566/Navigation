@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, ShieldCheck, ExternalLink, Save, Info } from 'lucide-react';
+import { X, Key, ShieldCheck, ExternalLink, Save, Info, Activity, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { getAI } from '../services/ai';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -12,18 +13,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testError, setTestError] = useState('');
+
+  // JSON detection
+  const isJsonPasted = apiKey.trim().startsWith('{') || apiKey.trim().startsWith('[');
 
   useEffect(() => {
     if (isOpen) {
       const savedKey = localStorage.getItem('GEMINI_API_KEY') || '';
       setApiKey(savedKey);
       setIsSaved(false);
+      setTestStatus('idle');
+      setTestError('');
     }
   }, [isOpen]);
 
+  const handleTest = async () => {
+    if (!apiKey.trim()) return;
+    setTestStatus('testing');
+    setTestError('');
+    
+    try {
+      const ai = getAI(apiKey.trim());
+      await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: "hi",
+      });
+      setTestStatus('success');
+    } catch (err: any) {
+      console.error("API Key Test Failed:", err);
+      setTestStatus('error');
+      setTestError(err?.message || "Invalid API key or network error.");
+    }
+  };
+
   const handleSave = () => {
     setIsLoading(true);
-    // Simulate slight save time for UX
     setTimeout(() => {
       localStorage.setItem('GEMINI_API_KEY', apiKey.trim());
       setIsLoading(false);
@@ -94,18 +120,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <input
                     type="password"
                     value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
+                    onChange={(e) => {
+                      setApiKey(e.target.value);
+                      setTestStatus('idle');
+                    }}
                     placeholder="Enter your API key here..."
                     className={cn(
                       "w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-5 text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all font-mono text-sm",
-                      isSaved && "border-green-200 bg-green-50/30"
+                      isSaved && "border-green-200 bg-green-50/30",
+                      isJsonPasted && "border-amber-200 bg-amber-50/30"
                     )}
                   />
-                  {apiKey && (
+                  {apiKey && !isJsonPasted && (
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
                        <ShieldCheck className={cn("w-4 h-4 transition-all", apiKey.length > 20 ? "text-green-500" : "text-slate-300")} />
                     </div>
                   )}
+                </div>
+
+                {isJsonPasted && (
+                  <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-2xl border border-amber-100 animate-in shake duration-500">
+                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-amber-600 mb-1">JSON format detected!</p>
+                      <p className="text-[11px] text-amber-500 leading-relaxed font-medium">
+                        It looks like you pasted a <span className="font-bold">Service Account Key (JSON)</span>. 
+                        The website needs a <span className="font-bold">Gemini API Key string</span> (which starts with AIza...). 
+                        Please copy the string from Google AI Studio instead.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2">
+                   <button
+                     onClick={handleTest}
+                     disabled={!apiKey.trim() || testStatus === 'testing' || isJsonPasted}
+                     className={cn(
+                       "flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95",
+                       testStatus === 'success' ? "bg-green-50 text-green-600 border border-green-100" :
+                       testStatus === 'error' ? "bg-red-50 text-red-600 border border-red-100" :
+                       "bg-slate-50 text-slate-600 hover:bg-slate-100 shadow-sm"
+                     )}
+                   >
+                     {testStatus === 'testing' ? <Activity className="w-3 h-3 animate-spin" /> : <Activity className="w-3 h-3" />}
+                     {testStatus === 'success' ? "Working!" : testStatus === 'error' ? "Test Failed" : "Test Key"}
+                   </button>
+                   {testStatus === 'error' && (
+                     <p className="text-[10px] text-red-400 font-medium truncate flex-1">
+                       {testError}
+                     </p>
+                   )}
                 </div>
                 
                 <div className="flex items-start gap-3 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
