@@ -7,6 +7,7 @@ import { ChatSession, Message } from './types';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { AuthOverlay } from './components/AuthOverlay';
+import { InstallPWA } from './components/InstallPWA';
 import { Menu, ChevronsRight } from 'lucide-react';
 import { cn } from './lib/utils';
 import { doc, getDocFromServer } from 'firebase/firestore';
@@ -332,6 +333,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-white text-slate-800 font-sans">
+      <InstallPWA />
       {/* Mobile Sidebar Toggle */}
       <button
         onClick={() => setIsSidebarOpen(true)}

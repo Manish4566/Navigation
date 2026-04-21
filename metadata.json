@@ -1,6 +1,6 @@
 {
-  "name": "VocalAI: Voice & Text Assistant",
-  "description": "An intelligent AI assistant featuring voice conversations, persistent chat history, and high-level reasoning.",
+  "name": "VocalAI PC Master",
+  "description": "Sophisticated AI Assistant for PC Control, Voice Conversations, and Intelligent System Automation.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": []
 }
