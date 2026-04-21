@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, ShieldCheck, ExternalLink, Save, Info, Activity, AlertCircle } from 'lucide-react';
+import { X, Key, ShieldCheck, ExternalLink, Save, Info, Activity, AlertCircle, Eye, EyeOff, Edit2, Send, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { getAI } from '../services/ai';
@@ -10,59 +10,113 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const [apiKey, setApiKey] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [bridgeUrl, setBridgeUrl] = useState('');
+  const [isKeyVisible, setIsKeyVisible] = useState(false);
+  const [isKeySaved, setIsKeySaved] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testError, setTestError] = useState('');
+  const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'checking' | 'online' | 'offline'>('idle');
 
   // JSON detection
-  const isJsonPasted = apiKey.trim().startsWith('{') || apiKey.trim().startsWith('[');
+  const isJsonPasted = apiKeyInput.trim().startsWith('{') || apiKeyInput.trim().startsWith('[');
 
   useEffect(() => {
     if (isOpen) {
-      const savedKey = localStorage.getItem('GEMINI_API_KEY') || '';
-      setApiKey(savedKey);
-      setIsSaved(false);
+      const savedKey = localStorage.getItem('GEMINI_API_KEY');
+      const savedBridge = localStorage.getItem('BRIDGE_URL') || '';
+      
+      setBridgeUrl(savedBridge);
+      setBridgeStatus('idle');
+
+      if (savedKey) {
+        setApiKeyInput(savedKey);
+        setIsKeySaved(true);
+      } else {
+        setApiKeyInput('');
+        setIsKeySaved(false);
+      }
       setTestStatus('idle');
       setTestError('');
     }
   }, [isOpen]);
 
-  const handleTest = async () => {
-    if (!apiKey.trim()) return;
+  const handleSaveConfig = () => {
+    localStorage.setItem('BRIDGE_URL', bridgeUrl.trim());
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000);
+  };
+
+  const handleCheckBridge = async () => {
+    if (!bridgeUrl.trim()) return;
+    setBridgeStatus('checking');
+    try {
+      const res = await fetch(`${bridgeUrl.trim()}/status`, { 
+        method: 'GET',
+        mode: 'cors',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) setBridgeStatus('online');
+      else setBridgeStatus('offline');
+    } catch (e) {
+      setBridgeStatus('offline');
+    }
+  };
+
+  const handleSendKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    
+    setIsLoading(true);
+    // Auto-test before saving to ensure a "Working System"
+    try {
+      const ai = getAI(apiKeyInput.trim());
+      await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: "hi",
+      });
+      
+      localStorage.setItem('GEMINI_API_KEY', apiKeyInput.trim());
+      setIsKeySaved(true);
+      setTestStatus('success');
+    } catch (err: any) {
+      console.error("API Key Test Failed:", err);
+      setTestStatus('error');
+      setTestError(err?.message || "Invalid API key or network error.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditKey = () => {
+    setIsKeySaved(false);
+    setTestStatus('idle');
+  };
+
+  const handleRemove = () => {
+    localStorage.removeItem('GEMINI_API_KEY');
+    setApiKeyInput('');
+    setIsKeySaved(false);
+    setTestStatus('idle');
+  };
+
+  const handleTestOnly = async () => {
+    if (!apiKeyInput.trim()) return;
     setTestStatus('testing');
     setTestError('');
     
     try {
-      const ai = getAI(apiKey.trim());
+      const ai = getAI(apiKeyInput.trim());
       await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: "hi",
       });
       setTestStatus('success');
     } catch (err: any) {
-      console.error("API Key Test Failed:", err);
       setTestStatus('error');
-      setTestError(err?.message || "Invalid API key or network error.");
+      setTestError(err?.message || "Test failed.");
     }
-  };
-
-  const handleSave = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      localStorage.setItem('GEMINI_API_KEY', apiKey.trim());
-      setIsLoading(false);
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
-    }, 500);
-  };
-
-  const handleRemove = () => {
-    localStorage.removeItem('GEMINI_API_KEY');
-    setApiKey('');
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2000);
   };
 
   return (
@@ -86,10 +140,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             {/* Header */}
             <div className="flex items-center justify-between p-8 border-b border-slate-50">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-indigo-50 rounded-2xl">
-                  <Key className="w-5 h-5 text-indigo-600" />
+                <div className="p-3 bg-amber-50 rounded-2xl">
+                  <Key className="w-5 h-5 text-amber-600" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-800 tracking-tight">API Settings</h2>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800 tracking-tight">Tiered Configuration</h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">API Management System</p>
+                </div>
               </div>
               <button 
                 onClick={onClose}
@@ -99,116 +156,211 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </button>
             </div>
 
-            <div className="p-8 space-y-8">
-              {/* API Key Input */}
-              <div className="space-y-4">
+            <div className="p-8 space-y-6">
+              {/* API Configuration Section */}
+              <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50/30 space-y-4">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">
-                    Gemini API Key
-                  </label>
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck size={18} className="text-amber-500" />
+                    <span className="font-bold text-slate-700 text-sm">Priority Settings</span>
+                  </div>
                   <a 
                     href="https://aistudio.google.com/app/apikey" 
                     target="_blank" 
                     rel="noreferrer"
-                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-all"
+                    className="text-[11px] font-bold text-amber-600 hover:underline flex items-center gap-1 transition-all"
                   >
-                    Get Key <ExternalLink className="w-3 h-3" />
+                    Get Free Key <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
-                
-                <div className="relative group">
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      setTestStatus('idle');
-                    }}
-                    placeholder="Enter your API key here..."
-                    className={cn(
-                      "w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-5 text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all font-mono text-sm",
-                      isSaved && "border-green-200 bg-green-50/30",
-                      isJsonPasted && "border-amber-200 bg-amber-50/30"
-                    )}
-                  />
-                  {apiKey && !isJsonPasted && (
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                       <ShieldCheck className={cn("w-4 h-4 transition-all", apiKey.length > 20 ? "text-green-500" : "text-slate-300")} />
+
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Gemini API Key (Standard)</p>
+                  
+                  {!isKeySaved ? (
+                    <div className="relative flex gap-2">
+                      <div className="relative flex-1">
+                        <input 
+                          type={isKeyVisible ? "text" : "password"}
+                          placeholder="Paste your API key here..."
+                          value={apiKeyInput}
+                          onChange={e => {
+                            setApiKeyInput(e.target.value);
+                            setTestStatus('idle');
+                          }}
+                          className={cn(
+                            "w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-amber-500/40 transition-all font-mono",
+                            isJsonPasted && "border-red-200 bg-red-50/30"
+                          )}
+                        />
+                        <button 
+                          onClick={() => setIsKeyVisible(!isKeyVisible)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-300 hover:text-slate-500 transition-all"
+                        >
+                          {isKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <button 
+                        onClick={handleSendKey}
+                        disabled={!apiKeyInput.trim() || isLoading || isJsonPasted}
+                        className="bg-amber-500 text-white p-3.5 rounded-xl hover:bg-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-lg shadow-amber-100 flex items-center justify-center min-w-[52px]"
+                      >
+                        {isLoading ? (
+                          <Activity size={18} className="animate-spin" />
+                        ) : (
+                          <Send size={18} />
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3.5 shadow-sm">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse" />
+                        <span className="text-sm text-slate-600 font-mono truncate">
+                          {isKeyVisible ? apiKeyInput : '••••••••••••••••••••••••'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <button 
+                          onClick={() => setIsKeyVisible(!isKeyVisible)}
+                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+                          title={isKeyVisible ? "Hide Key" : "View Key"}
+                        >
+                          {isKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                        <button 
+                          onClick={handleEditKey}
+                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+                          title="Edit Key"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   )}
-                </div>
 
-                {isJsonPasted && (
-                  <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-2xl border border-amber-100 animate-in shake duration-500">
-                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-bold text-amber-600 mb-1">JSON format detected!</p>
-                      <p className="text-[11px] text-amber-500 leading-relaxed font-medium">
-                        It looks like you pasted a <span className="font-bold">Service Account Key (JSON)</span>. 
-                        The website needs a <span className="font-bold">Gemini API Key string</span> (which starts with AIza...). 
-                        Please copy the string from Google AI Studio instead.
+                  {isJsonPasted && (
+                    <div className="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
+                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-red-600 font-medium leading-relaxed">
+                        JSON detected! Please paste only the API Key string (e.g., AIza...).
                       </p>
                     </div>
+                  )}
+
+                  <div className="flex flex-col gap-2 pt-1">
+                    <p className="text-[9px] text-slate-400 leading-tight px-1 font-medium">
+                      Your key is stored locally for this session. It enables Live Vision, Voice, and System Control.
+                    </p>
+                    
+                    {!isKeySaved && apiKeyInput.trim() && !isJsonPasted && (
+                      <div className="flex items-center gap-2 px-1">
+                        <button
+                          onClick={handleTestOnly}
+                          disabled={testStatus === 'testing'}
+                          className={cn(
+                            "text-[10px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5",
+                            testStatus === 'success' ? "text-green-600 bg-green-50" :
+                            testStatus === 'error' ? "text-red-600 bg-red-50" :
+                            "text-slate-500 bg-slate-100 hover:bg-slate-200"
+                          )}
+                        >
+                          {testStatus === 'testing' ? <Activity size={10} className="animate-spin" /> : <Activity size={10} />}
+                          {testStatus === 'success' ? "Working Smoothly" : testStatus === 'error' ? "Test Failed" : "Verify Connectivity"}
+                        </button>
+                        {testStatus === 'error' && (
+                          <span className="text-[9px] text-red-400 font-medium truncate flex-1">
+                             {testError}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                )}
-                
-                <div className="flex items-center gap-2">
-                   <button
-                     onClick={handleTest}
-                     disabled={!apiKey.trim() || testStatus === 'testing' || isJsonPasted}
-                     className={cn(
-                       "flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95",
-                       testStatus === 'success' ? "bg-green-50 text-green-600 border border-green-100" :
-                       testStatus === 'error' ? "bg-red-50 text-red-600 border border-red-100" :
-                       "bg-slate-50 text-slate-600 hover:bg-slate-100 shadow-sm"
-                     )}
-                   >
-                     {testStatus === 'testing' ? <Activity className="w-3 h-3 animate-spin" /> : <Activity className="w-3 h-3" />}
-                     {testStatus === 'success' ? "Working!" : testStatus === 'error' ? "Test Failed" : "Test Key"}
-                   </button>
-                   {testStatus === 'error' && (
-                     <p className="text-[10px] text-red-400 font-medium truncate flex-1">
-                       {testError}
-                     </p>
-                   )}
                 </div>
-                
-                <div className="flex items-start gap-3 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
-                  <Info className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                  <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
-                    Your API key is stored locally in your browser. It is never sent to our servers. Creating a key is free at <span className="font-bold">Google AI Studio</span>.
+              </div>
+
+              {/* Bridge Configuration Section */}
+              <div className="p-5 rounded-2xl border border-indigo-100 bg-indigo-50/10 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Activity size={18} className="text-indigo-500" />
+                    <span className="font-bold text-slate-700 text-sm">PC Bridge Control</span>
+                  </div>
+                  <div className={cn(
+                    "px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center gap-1",
+                    bridgeStatus === 'online' ? "bg-green-100 text-green-600" :
+                    bridgeStatus === 'offline' ? "bg-red-100 text-red-600" :
+                    "bg-slate-100 text-slate-400"
+                  )}>
+                    <div className={cn("w-1.5 h-1.5 rounded-full", 
+                      bridgeStatus === 'online' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" :
+                      bridgeStatus === 'offline' ? "bg-red-500" :
+                      "bg-slate-400"
+                    )} />
+                    {bridgeStatus === 'online' ? "Online" : bridgeStatus === 'offline' ? "Offline" : "Idle"}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Bridge URL (ngrok link)</p>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text"
+                      placeholder="https://your-bridge.ngrok-free.app"
+                      value={bridgeUrl}
+                      onChange={e => {
+                        setBridgeUrl(e.target.value);
+                        setBridgeStatus('idle');
+                      }}
+                      className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-indigo-500/40 transition-all font-mono"
+                    />
+                    <button 
+                      onClick={handleSaveConfig}
+                      className={cn(
+                        "bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100",
+                        isSaved && "bg-green-600"
+                      )}
+                    >
+                      {isSaved ? <ShieldCheck size={18} /> : <Save size={18} />}
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between px-1">
+                    <button
+                      onClick={handleCheckBridge}
+                      disabled={bridgeStatus === 'checking' || !bridgeUrl.trim()}
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-all flex items-center gap-1.5"
+                    >
+                      {bridgeStatus === 'checking' ? <Activity size={10} className="animate-spin" /> : <Activity size={10} />}
+                      Check Connection
+                    </button>
+                    <p className="text-[9px] text-slate-400 font-medium italic">
+                      Use the link provided by your Python Bridge.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical breakdown info */}
+              <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-start gap-3">
+                <Info className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-[11px] font-bold text-indigo-900">Tiered Logic Active</p>
+                  <p className="text-[10px] text-indigo-700 leading-relaxed font-medium">
+                    Priority 1: User's Manual Key (Priority)<br/>
+                    Priority 2: System Environment Variable (Fallback)
                   </p>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-3 pt-4">
+              {isKeySaved && (
                 <button
-                  onClick={handleSave}
-                  disabled={isLoading || !apiKey.trim()}
-                  className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-indigo-700 transition-all active:scale-[0.98] disabled:bg-slate-200 disabled:text-slate-400 shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
+                  onClick={handleRemove}
+                  className="w-full py-3 text-red-500 font-bold text-xs hover:bg-red-50 transition-all rounded-xl border border-transparent hover:border-red-100"
                 >
-                  {isLoading ? (
-                    <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  ) : isSaved ? (
-                    <>Saved Successfully!</>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      Save API Key
-                    </>
-                  )}
+                  Reset Configuration & Remove Key
                 </button>
-                
-                {localStorage.getItem('GEMINI_API_KEY') && (
-                  <button
-                    onClick={handleRemove}
-                    className="px-6 py-4 border border-slate-100 text-red-500 font-bold text-sm rounded-2xl hover:bg-red-50 transition-all hover:border-red-100"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </motion.div>
         </div>

@@ -211,12 +211,32 @@ export default function App() {
         // Final text to display
         let finalContent = responseText;
 
-        // If there are function calls, we simulate execution in web preview
-        // but log it so the user knows it would run on their PC
+        // If there are function calls, we execute them via the Local Bridge if configured
         if (calls && calls.length > 0) {
-          console.log("PC CONTROL ACTIONS:", calls);
-          const logs = calls.map((c: any) => `\n[SYSTEM ACTION]: Executing ${c.name} with ${JSON.stringify(c.args)}`).join("");
-          finalContent += logs;
+          const bridgeUrl = localStorage.getItem('BRIDGE_URL');
+          const logs = [];
+          
+          for (const call of calls) {
+            logs.push(`\n[SYSTEM ACTION]: Executing ${call.name} with ${JSON.stringify(call.args)}`);
+            
+            if (bridgeUrl) {
+              try {
+                const res = await fetch(`${bridgeUrl}/execute`, {
+                  method: 'POST',
+                  mode: 'cors',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(call)
+                });
+                const result = await res.json();
+                logs.push(`\n[BRIDGE RESPONSE]: ${result.status || 'Success'}`);
+              } catch (e) {
+                logs.push(`\n[BRIDGE ERROR]: Failed to reach local bridge. Please check your ngrok URL.`);
+              }
+            } else {
+              logs.push(`\n[NOTICE]: Local Bridge URL not configured in Settings. Command logged but not sent.`);
+            }
+          }
+          finalContent += logs.join("");
         }
 
         await dbService.addMessage(sessionId!, {
