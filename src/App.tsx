@@ -33,9 +33,9 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Force migration to Gemini 3.1 Pro if on old flash or gemini-1.5 models (case-insensitive)
+        // Force migration to Gemini 3.1 Pro if on old models (case-insensitive)
         const modelName = (parsed.model || '').toLowerCase();
-        if (modelName.includes('flash') || modelName.includes('gemini-1.5')) {
+        if (!modelName.includes('gemini-3')) {
           parsed.model = 'gemini-3.1-pro-preview';
           const gemini = parsed.aiSettings?.find((s: any) => s.id === 'gemini');
           if (gemini) {

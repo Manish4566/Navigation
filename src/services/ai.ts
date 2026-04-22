@@ -87,7 +87,7 @@ export function getAI(customKey?: string) {
 
 export async function generateChatResponse(messages: { role: string; content: string }[], useThinking: boolean = false, pastContext: string = "") {
   const ai = getAI();
-  // Using recommended model from skill for complex tasks
+  // Using gemini-3.1-pro-preview which is free and stable in this environment
   const model = "gemini-3.1-pro-preview"; 
   
   const contents = messages.map(m => ({

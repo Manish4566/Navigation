@@ -279,30 +279,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               // CRITICAL: Linter expects object format in this environment
                               const testAI = new GoogleGenAI({ apiKey: config.customApiKey! });
                               
-                              // First attempt: Gemini 3 Flash (recommended for basic tasks)
+                              // First attempt: Gemini 3.1 Pro (Recommended Pro Model)
                               try {
                                 const result = await testAI.models.generateContent({ 
-                                  model: "gemini-3-flash-preview",
+                                  model: "gemini-3.1-pro-preview",
                                   contents: "hi" 
                                 });
                                 if (result.text) {
-                                  alert("API Connection Successful! Gemini 3 Flash is active.");
+                                  alert("API Connection Successful! Gemini 3.1 Pro is active.");
                                   return;
                                 }
-                              } catch (flashError: any) {
-                                console.warn("Flash model test failed, trying Pro fallback:", flashError);
-                                // If specifically a 404, try Pro
-                                if (JSON.stringify(flashError).includes('404')) {
-                                  const proResult = await testAI.models.generateContent({ 
-                                    model: "gemini-3.1-pro-preview",
-                                    contents: "hi" 
-                                  });
-                                  if (proResult.text) {
-                                    alert("API Key Valid! Pro model responded, but Flash returned 404. Checking availability...");
-                                    return;
-                                  }
+                              } catch (proError: any) {
+                                console.warn("Pro model test failed, trying Flash fallback:", proError);
+                                // Fallback to Flash
+                                const flashResult = await testAI.models.generateContent({ 
+                                  model: "gemini-3-flash-preview",
+                                  contents: "hi" 
+                                });
+                                if (flashResult.text) {
+                                  alert("API Key Valid! Flash model responded, but Pro model returned an error.");
+                                  return;
                                 }
-                                throw flashError;
+                                throw proError;
                               }
                             } catch (e: any) {
                               console.error("Test API error:", e);
