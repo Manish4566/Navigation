@@ -259,13 +259,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </div>
                       )}
                       
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-indigo-50/50 border border-indigo-100">
-                        <span className="text-[10px] font-bold text-indigo-600">Model</span>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                          <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-tight">
-                            {config.model === 'gemini-1.5-pro' ? 'Gemini 1.5 Pro' : config.model}
-                          </span>
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 shadow-sm">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active Model</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                            <div className="w-1.5 min-w-[6px] h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tight">
+                              {config.model === 'models/gemini-1.5-pro' ? 'Gemini 1.5 Pro' : config.model.replace('models/', '').toUpperCase()}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -273,12 +275,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <button
                           onClick={async () => {
                             try {
-                              const testAI = new (await import('@google/genai')).GoogleGenAI({ apiKey: config.customApiKey! });
-                              const model = testAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                              await model.generateContent("test");
-                              alert("API Connection Successful! Gemini 1.5 Pro is active.");
-                            } catch (e) {
-                              alert("API Connection Failed. Please check your key.");
+                              const { GoogleGenAI } = await import('@google/genai');
+                              // CRITICAL: Linter expects object format in this environment
+                              const testAI = new GoogleGenAI({ apiKey: config.customApiKey! });
+                              
+                              // First attempt: Gemini 3 Flash (recommended for basic tasks)
+                              try {
+                                const result = await testAI.models.generateContent({ 
+                                  model: "gemini-3-flash-preview",
+                                  contents: "hi" 
+                                });
+                                if (result.text) {
+                                  alert("API Connection Successful! Gemini 3 Flash is active.");
+                                  return;
+                                }
+                              } catch (flashError: any) {
+                                console.warn("Flash model test failed, trying Pro fallback:", flashError);
+                                // If specifically a 404, try Pro
+                                if (JSON.stringify(flashError).includes('404')) {
+                                  const proResult = await testAI.models.generateContent({ 
+                                    model: "gemini-3.1-pro-preview",
+                                    contents: "hi" 
+                                  });
+                                  if (proResult.text) {
+                                    alert("API Key Valid! Pro model responded, but Flash returned 404. Checking availability...");
+                                    return;
+                                  }
+                                }
+                                throw flashError;
+                              }
+                            } catch (e: any) {
+                              console.error("Test API error:", e);
+                              const errorStr = JSON.stringify(e);
+                              if (errorStr.includes('apikey') || errorStr.includes('401') || errorStr.includes('403')) {
+                                alert("API Connection Failed: Invalid API Key. Please check your key at Google AI Studio.");
+                              } else {
+                                alert(`API Connection Failed: ${e.message || "Please check your network and API key."}`);
+                              }
                             }
                           }}
                           className="w-full py-2 bg-slate-900 text-white rounded-xl text-[10px] font-bold hover:bg-slate-800 transition-all active:scale-95"

@@ -41,6 +41,11 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
+    // --- Connection Test ---
+    match /public_health_check/{document} {
+      allow get: if true;
+    }
+
     // --- Users Collection ---
     match /users/{userId} {
       allow get: if isOwner(userId);

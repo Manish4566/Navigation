@@ -30,9 +30,29 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [config, setConfig] = useState<LiveConfig>(() => {
     const saved = localStorage.getItem('wardenix_config');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Force migration to Gemini 3.1 Pro if on old flash or gemini-1.5 models (case-insensitive)
+        const modelName = (parsed.model || '').toLowerCase();
+        if (modelName.includes('flash') || modelName.includes('gemini-1.5')) {
+          parsed.model = 'gemini-3.1-pro-preview';
+          const gemini = parsed.aiSettings?.find((s: any) => s.id === 'gemini');
+          if (gemini) {
+            gemini.selectedVersion = 'gemini-3.1-pro-preview';
+            gemini.versions = [
+              { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro' },
+              { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' }
+            ];
+          }
+        }
+        return parsed;
+      } catch (e) {
+        console.error("Failed to parse saved config", e);
+      }
+    }
     return {
-      model: 'gemini-1.5-pro',
+      model: 'gemini-3.1-pro-preview',
       voiceName: 'Kore',
       webcamSize: 180,
       isDeveloperMode: false,
@@ -44,10 +64,10 @@ export default function App() {
           description: 'Multimodal AI with direct PC integration',
           icon: 'sparkles',
           enabled: true,
-          selectedVersion: 'gemini-1.5-pro',
+          selectedVersion: 'gemini-3.1-pro-preview',
           versions: [
-            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-            { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' }
+            { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro' },
+            { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' }
           ]
         },
         {
@@ -98,10 +118,12 @@ export default function App() {
           // Using a slight delay before the first attempt to allow network to "warm up"
           if (i === 0) await new Promise(r => setTimeout(r, 1000));
           
-          await getDocFromServer(doc(db, '_connection_test_', 'test'));
+          await getDocFromServer(doc(db, 'public_health_check', 'connectivity'));
           console.log("Firestore connection successfully established.");
           return;
         } catch (error: any) {
+          console.error(`Firestore connection attempt ${i + 1} error:`, error.code || error.message);
+          
           // If it's just "not found", that's actually a success (it reached the server)
           if (error?.code === 'not-found' || error?.message?.includes('not-found')) {
             console.log("Firestore connection verified (endpoint reachable).");

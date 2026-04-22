@@ -78,6 +78,7 @@ export function getAI(customKey?: string) {
   // If the key has changed or if it hasn't been initialized yet
   if (!genAI || currentKey !== keyToUse) {
     currentKey = keyToUse;
+    // According to linter, it expects GoogleGenAIOptions object in this env
     genAI = new GoogleGenAI({ apiKey: keyToUse });
   }
   
@@ -86,8 +87,8 @@ export function getAI(customKey?: string) {
 
 export async function generateChatResponse(messages: { role: string; content: string }[], useThinking: boolean = false, pastContext: string = "") {
   const ai = getAI();
-  // Using gemini-1.5-pro as requested by the user
-  const model = "gemini-1.5-pro"; 
+  // Using recommended model from skill for complex tasks
+  const model = "gemini-3.1-pro-preview"; 
   
   const contents = messages.map(m => ({
     role: m.role === 'user' ? 'user' : 'model',
@@ -106,38 +107,35 @@ export async function generateChatResponse(messages: { role: string; content: st
   
   When the user asks "What did I say in the last set?" or similar memory queries, refer to the HISTORY CONTEXT above.`;
 
-  const config: any = {
-    systemInstruction,
-    tools: [
-      ...pcControlTools,
-      { googleMaps: {} } // Enable built-in Google Maps integration
-    ],
-    toolConfig: { includeServerSideToolInvocations: true } // Required for built-in tools with custom functions
-  };
-
-  if (useThinking) {
-    config.thinkingConfig = { thinkingLevel: ThinkingLevel.HIGH };
-  }
-
   try {
-    const result = await ai.models.generateContent({
+    const response = await ai.models.generateContent({
       model,
       contents,
-      config,
+      config: {
+        systemInstruction,
+        thinkingConfig: useThinking ? { thinkingLevel: ThinkingLevel.HIGH } : undefined,
+        tools: [
+          ...pcControlTools,
+          { googleMaps: {} }
+        ],
+        toolConfig: { includeServerSideToolInvocations: true }
+      }
     });
 
-    // Handle tool use
-    if (result.functionCalls) {
+    const text = response.text || "";
+    const functionCalls = response.functionCalls;
+
+    if (functionCalls && functionCalls.length > 0) {
       return { 
-        text: result.text || "Executing command...", 
-        calls: result.functionCalls.map(f => ({
+        text: text || "Executing command...", 
+        calls: functionCalls.map(f => ({
           name: f.name,
           args: f.args
         }))
       };
     }
 
-    return { text: result.text || "" };
+    return { text };
   } catch (error: any) {
     if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota')) {
       return "क्षमा करें, वर्तमान में मेरी प्रश्न पूछने की सीमा समाप्त हो गई है (Rate Limit Exceeded)। कृपया कुछ क्षण प्रतीक्षा करें और फिर से प्रयास करें।";
@@ -163,7 +161,7 @@ export async function generateTTS(text: string, voiceName: 'Kore' | 'Puck' | 'Ch
       },
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    const base64Audio = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
     if (!base64Audio) return null;
     
     return base64Audio;
