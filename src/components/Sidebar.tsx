@@ -147,6 +147,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Footer */}
         <div className="mt-8 pt-6 border-t border-slate-50 relative">
+          {/* Bridge Status Indicator */}
+          <div className="mb-4 px-2">
+            <div className={cn(
+              "flex items-center gap-2 p-3 rounded-xl border transition-all",
+              localStorage.getItem('BRIDGE_URL') ? "bg-emerald-50/50 border-emerald-100" : "bg-slate-50/50 border-slate-100"
+            )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full",
+                localStorage.getItem('BRIDGE_URL') ? "bg-emerald-500 animate-pulse" : "bg-slate-300"
+              )} />
+              <div className="flex-1">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PC Connection</p>
+                <p className="text-xs font-bold text-slate-600 truncate">
+                  {localStorage.getItem('BRIDGE_URL')?.replace(/https?:\/\//, '') || "Not Connected"}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <AnimatePresence mode="wait">
             {showProfileMenu && (
               <motion.div 

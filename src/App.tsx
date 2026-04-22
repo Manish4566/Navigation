@@ -300,7 +300,20 @@ export default function App() {
           const logs = [];
           
           for (const call of calls) {
-            logs.push(`\n[SYSTEM ACTION]: Executing ${call.name} with ${JSON.stringify(call.args)}`);
+            // Transform Google tool call format to user's AssistantCommand format
+            // User format: { action: string, target?: string, value?: int, requires_confirmation?: bool }
+            const commandPayload = {
+              action: call.name,
+              target: call.args.target || call.args.appName || call.args.action || null,
+              value: call.args.value || null,
+              requires_confirmation: false // Assistant will handle this locally based on config
+            };
+
+            const displayLabel = `${call.name.replace(/_/g, ' ').toUpperCase()}`;
+            logs.push(`\n\n### 🖥️ PC COMMAND: ${displayLabel}`);
+            logs.push(`\n- **Action:** ${commandPayload.action}`);
+            if (commandPayload.target) logs.push(`\n- **Target:** ${commandPayload.target}`);
+            if (commandPayload.value) logs.push(`\n- **Value:** ${commandPayload.value}`);
             
             if (bridgeUrl) {
               try {
@@ -308,15 +321,15 @@ export default function App() {
                   method: 'POST',
                   mode: 'cors',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(call)
+                  body: JSON.stringify(commandPayload)
                 });
                 const result = await res.json();
-                logs.push(`\n[BRIDGE RESPONSE]: ${result.status || 'Success'}`);
+                logs.push(`\n\n✅ **Execution Result:** ${result.message || result.status || 'Command sent successfully'}`);
               } catch (e) {
-                logs.push(`\n[BRIDGE ERROR]: Failed to reach local bridge. Please check your ngrok URL.`);
+                logs.push(`\n\n❌ **Bridge Error:** Could not connect to local bridge at \`${bridgeUrl}\`. Please ensure your Python script is running and your tunnel (like ngrok) is active.`);
               }
             } else {
-              logs.push(`\n[NOTICE]: Local Bridge URL not configured in Settings. Command logged but not sent.`);
+              logs.push(`\n\n⚠️ **Notice:** Local Bridge URL not configured. Go to **Settings > Wardenix Bridge** to set up your PC connection.`);
             }
           }
           finalContent += logs.join("");

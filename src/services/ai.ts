@@ -1,111 +1,143 @@
-import { GoogleGenAI, Modality, ThinkingLevel, Type } from "@google/genai";
+import { GoogleGenAI, Modality, ThinkingLevel } from "@google/genai";
 
-// PC Control Tool Specializations
+// PC Control Tool Specializations (Formatted for internal generateContent API)
 const pcControlTools = [
   {
     functionDeclarations: [
       {
-        name: "launch_pc_application",
-        description: "Launch any application on the user's PC (e.g., chrome, vscode, calculator).",
+        name: "open_app",
+        description: "Launch an allowed application on the PC.",
         parameters: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            appName: { type: Type.STRING, description: "Name of the app to launch." }
+            target: { type: "STRING", description: "Key name of the app (e.g., chrome, notepad, calculator)." }
           },
-          required: ["appName"]
+          required: ["target"]
         }
       },
       {
-        name: "execute_system_command",
-        description: "Run a shell or terminal command on the local machine.",
+        name: "close_app",
+        description: "Terminate an allowed process/application.",
         parameters: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            command: { type: Type.STRING, description: "The raw shell command string." }
+            target: { type: "STRING", description: "Name of the process to close (e.g., notepad, chrome)." }
           },
-          required: ["command"]
+          required: ["target"]
         }
       },
       {
-        name: "control_system_audio",
-        description: "Adjust PC volume or media playback.",
+        name: "set_brightness",
+        description: "Adjust the PC screen brightness level.",
         parameters: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            action: { 
-              type: Type.STRING, 
-              enum: ["VOLUME_UP", "VOLUME_DOWN", "MUTE", "PLAY_PAUSE"],
-              description: "The media action to perform." 
-            }
+            value: { type: "INTEGER", description: "Brightness percentage (10-100)." }
+          },
+          required: ["value"]
+        }
+      },
+      {
+        name: "wifi_toggle",
+        description: "Turn Wi-Fi on or off.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            target: { type: "STRING", enum: ["on", "off"], description: "The desired Wi-Fi state." }
+          },
+          required: ["target"]
+        }
+      },
+      {
+        name: "get_system_info",
+        description: "Retrieve CPU, RAM, Disk, and Battery statistics from the PC.",
+        parameters: {
+          type: "OBJECT",
+          properties: {}
+        }
+      },
+      {
+        name: "lock_pc",
+        description: "Immediately lock the Windows workstation.",
+        parameters: {
+          type: "OBJECT",
+          properties: {}
+        }
+      },
+      {
+        name: "sleep_pc",
+        description: "Put the PC into sleep mode.",
+        parameters: {
+          type: "OBJECT",
+          properties: {}
+        }
+      },
+      {
+        name: "power_action",
+        description: "Shutdown or Restart the PC.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["shutdown", "restart"], description: "The power action to take." }
           },
           required: ["action"]
         }
       },
       {
         name: "open_web_link",
-        description: "Open a specific URL in the default web browser.",
+        description: "Search the web or open a specific URL in the default browser.",
         parameters: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            url: { type: Type.STRING, description: "The full URL including protocol (https)." }
+            url: { type: "STRING", description: "The search query or full URL." }
           },
           required: ["url"]
-        }
-      },
-      {
-        name: "get_pc_performance",
-        description: "Retrieve real-time CPU and RAM usage statistics.",
-        parameters: {
-          type: Type.OBJECT,
-          properties: {}
         }
       }
     ]
   }
 ];
 
-// Initialization with lazy loading for API key as per best practices
-let genAI: GoogleGenAI | null = null;
+let genAI: any = null;
 let currentKey: string | null = null;
 
 export function getAI(customKey?: string) {
   const keyToUse = customKey || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
-  
-  if (!keyToUse) {
-    throw new Error("GEMINI_API_KEY is not defined");
-  }
+  if (!keyToUse) throw new Error("GEMINI_API_KEY is not defined");
 
-  // If the key has changed or if it hasn't been initialized yet
   if (!genAI || currentKey !== keyToUse) {
     currentKey = keyToUse;
-    // According to linter, it expects GoogleGenAIOptions object in this env
     genAI = new GoogleGenAI({ apiKey: keyToUse });
   }
-  
   return genAI;
 }
 
-export async function generateChatResponse(messages: { role: string; content: string }[], useThinking: boolean = false, pastContext: string = "") {
+export async function generateChatResponse(
+  messages: { role: string; content: string }[], 
+  useThinking: boolean = false, 
+  pastContext: string = "",
+  modelId: string = "gemini-3-flash-preview"
+) {
   const ai = getAI();
-  // Using gemini-3.1-pro-preview which is free and stable in this environment
-  const model = "gemini-3.1-pro-preview"; 
+  const model = modelId || "gemini-3-flash-preview"; 
   
   const contents = messages.map(m => ({
     role: m.role === 'user' ? 'user' : 'model',
     parts: [{ text: m.content }]
   }));
 
-  const systemInstruction = `You are VocalAI PC Master, a sophisticated system controller.
+  const systemInstruction = `You are VocalAI PC Master, a powerful system controller based on the Safe PC Assistant protocol.
   
   HISTORY CONTEXT: ${pastContext || "No previous history found."}
   
   CAPABILITIES:
   - You can control hardware and software from A to Z using the provided tools.
-  - If a user asks to "Open Chrome" or "Check CPU", use the corresponding tool IMMEDIATELY.
+  - If a user asks to "Open Chrome", use open_app(target="chrome").
+  - If a user asks to "Close Notepad", use close_app(target="notepad").
+  - If a user asks to "Search YouTube for [Topic]", use open_web_link(url="https://www.youtube.com/results?search_query=[Topic]").
   - You are fluent in Hindi, English, and Hinglish.
-  - Always explain the action you are taking.
-  
-  When the user asks "What did I say in the last set?" or similar memory queries, refer to the HISTORY CONTEXT above.`;
+  - Always explain the action you are taking clearly.
+  - For sensitive actions like shutdown or restart, confirm with the user first unless they sound urgent.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -114,10 +146,7 @@ export async function generateChatResponse(messages: { role: string; content: st
       config: {
         systemInstruction,
         thinkingConfig: useThinking ? { thinkingLevel: ThinkingLevel.HIGH } : undefined,
-        tools: [
-          ...pcControlTools,
-          { googleMaps: {} }
-        ],
+        tools: pcControlTools,
         toolConfig: { includeServerSideToolInvocations: true }
       }
     });
@@ -127,54 +156,40 @@ export async function generateChatResponse(messages: { role: string; content: st
 
     if (functionCalls && functionCalls.length > 0) {
       return { 
-        text: text || "Executing command...", 
-        calls: functionCalls.map(f => ({
+        text: text || "Executing system command...", 
+        calls: functionCalls.map((f: any) => ({
           name: f.name,
           args: f.args
         }))
       };
     }
-
     return { text };
   } catch (error: any) {
-    if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota')) {
-      return "क्षमा करें, वर्तमान में मेरी प्रश्न पूछने की सीमा समाप्त हो गई है (Rate Limit Exceeded)। कृपया कुछ क्षण प्रतीक्षा करें और फिर से प्रयास करें।";
-    }
     console.error("AI Response Error:", error);
     throw error;
   }
 }
 
-export async function generateTTS(text: string, voiceName: 'Kore' | 'Puck' | 'Charon' | 'Fenrir' | 'Zephyr' | 'Aoede' = 'Kore') {
-  const ai = getAI();
+export async function generateTTS(text: string, voice: string) {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-tts-preview",
-      contents: [{ parts: [{ text }] }],
+      contents: [{ role: 'user', parts: [{ text: `Say: ${text}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName },
-          },
-        },
-      },
+            prebuiltVoiceConfig: { voiceName: voice }
+          }
+        }
+      }
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
-    if (!base64Audio) return null;
-    
-    return base64Audio;
-  } catch (error: any) {
-    if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota')) {
-      console.warn("TTS Quota Exceeded (429)");
-      return null;
-    }
-    throw error;
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    return base64Audio || null;
+  } catch (error) {
+    console.error("TTS Error:", error);
+    return null;
   }
 }
-
-// Live API (Audio/Video Conversation) - Simplified helper
-// Real implementation requires WebSocket or full-duplex through the SDK
-// The SDK handles WebRTC/WebSocket internally for Live API tasks.
-// Using gemini-3.1-flash-live-preview as hinted.
